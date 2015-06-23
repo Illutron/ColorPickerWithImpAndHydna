@@ -1,7 +1,7 @@
 // Content for Bemachine on hydna.com
 
 // Report number of connected clients on every open or close
-const MAX = 4;
+const MAX = 29;
 const KEY = 'clients_online';
 
 behavior('/colors', {
