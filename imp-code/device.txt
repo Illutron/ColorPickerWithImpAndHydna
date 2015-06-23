@@ -1,0 +1,206 @@
+// Copyright (c) 2013,2014 Electric Imp
+// This file is licensed under the MIT License
+// http://opensource.org/licenses/MIT
+//
+// Description: DMX512 Controller via impee-Kaylee
+
+// Modified a bit by Christian Liljedahl 2015, to receive dmx data and color data from the agent
+
+function dmxFromAgent(dmxValues){
+    local channel = 1;
+    foreach (dmxValue in dmxValues)
+    {
+        local dmxValueInt = dmxValue.tointeger();
+
+        dmx.setChannel(channel, dmxValueInt);
+        channel++;
+    }
+       
+}
+remembercolor <- { "r": 0, "b": 0, "g": 0, "w": 0 };
+
+function OneColor(data){
+    // Set many RGB fixtures to the same color
+    local red = data.r.tointeger();
+    local green = data.g.tointeger();
+    local blue = data.b.tointeger();
+    
+    // We do a rgb to rgbw conversion, because the lights we have have white
+    local white = getWhite(red, green, blue).tointeger();
+    local l = format("%d %d %d %d", red, green, blue, white);
+    local returncolor = {};
+    returncolor.r <- red;
+    returncolor.g <- green;
+    returncolor.b <- blue;
+    returncolor.w <- white;
+    
+    remembercolor = returncolor;
+    //server.log(l);
+    agent.send("onecolorset", returncolor);
+
+    local fixtures = 12;
+    local channel = 1;
+    while (channel <= fixtures*4){
+        dmx.setChannel(channel, red);
+        channel++;
+        dmx.setChannel(channel, green);
+        channel++;
+        dmx.setChannel(channel, blue);
+        channel++;
+        dmx.setChannel(channel, white);
+        channel++;
+        
+    }
+}
+
+function ReportColor(data){
+    agent.send("onecolorset", remembercolor);
+}
+
+function SetAllToOneColor(red,green,blue,white){
+    local fixtures = 12;
+    local channel = 1;
+    while (channel <= fixtures*4){
+        dmx.setChannel(channel, red);
+        channel++;
+        dmx.setChannel(channel, green);
+        channel++;
+        dmx.setChannel(channel, blue);
+        channel++;
+        dmx.setChannel(channel, white);
+        channel++;
+        
+    }
+    
+}
+
+//-------------------------------------------
+// Color correction from rgb to rgbw - 
+// Derived from http://codewelt.com/rgbw
+// The saturation is the colorfulness of a color relative to its own brightness.
+function saturation(red, green, blue) {
+    // Find the smallest of all three parameters.
+    local low = min(red, min(green, blue));
+    // Find the highest of all three parameters.
+    local high = max(red, max(green, blue));
+    // The difference between the last two variables
+    // divided by the highest is the saturation.
+    return math.floor(100. * ((high - low) / high));
+}
+ 
+// Returns the value of White
+function getWhite(red, green, blue) {
+    if((red + green + blue) == 0){
+        return 0;
+    } else 
+    {
+        return (255 - saturation(red, green, blue)) / 255. * (red + green + blue) / 3.;
+    }
+}
+
+function max(a,b){
+    if (a > b) {
+        return a;
+    }
+    else {
+        return b;
+    }
+}
+function min(a,b){
+    if (a < b) {
+        return a;
+    }
+    else {
+        return b;
+    }
+}
+//--------------------
+
+const DMXBAUD     = 250000;
+const FRAMESIZE   = 513;  // max 512 devices per frame ("universe"), 1 bytes per device, plus 1-byte start code
+const FRAMEPERIOD = 0.2; // send frame once per 200 ms
+
+class Dmx512Controller {
+    
+    uart        = null;
+    tx_en       = null;
+    tx_pin      = null;
+    
+    frame = blob(FRAMESIZE);
+    
+    constructor(_uart, _tx_pin, _tx_en_pin) {
+        uart = _uart;
+        tx_pin = _tx_pin;
+        tx_en = _tx_en_pin;
+        clearFrame();
+        sendFrame();
+    }
+    
+    function clearFrame() {
+        frame.seek(0);
+        while(!frame.eos()) {
+            frame.writen(0x00,'b');
+        }
+    }
+    
+    function sendFrame() {
+        // schedule this function to run again in FRAMEPERIOD
+        imp.wakeup(FRAMEPERIOD, sendFrame.bindenv(this));
+        
+        // send the break
+        tx_pin.configure(DIGITAL_OUT,0);
+
+        // uart.configure takes more than long enough to be the mark after break. 
+        // It would be great if this were faster.
+        uart.configure(DMXBAUD, 8, PARITY_NONE, 2, NO_CTSRTS);
+        
+        // send the frame
+        uart.write(frame);
+    }
+    
+    function setChannel(channel, value) {
+        // DMX channels are 1-based, with frame slot 0 reserved for the start code
+        // currently, only start code 0x00 is used (default value)
+        if (channel < 1) { channel = 1; } 
+        if (channel > 512) { channel = 512; }
+        //frame[channel] = (value & 0xff);
+        frame[channel] = value;
+        // value will be sent to device next time frame is sent
+    }
+    
+}
+
+// RUNTIME STARTS --------------------------------------------------------------
+
+//imp.enableblinkup(true);
+server.log(imp.getmacaddress());
+server.log(hardware.getdeviceid());
+server.log(imp.getsoftwareversion());
+
+// pin 5 is a GPIO used to select between receive and transmit modes on the RS-485 translator
+// externally pulled down (100k)
+// set high to transmit
+
+// Using a Transmit Enable is not needed since we are not receiving
+tx_en <- hardware.pin5; 
+tx_en.configure(DIGITAL_OUT);
+tx_en.write(1);
+
+
+uart <- hardware.uart12;
+uart.configure(DMXBAUD, 8, PARITY_NONE, 2, NO_CTSRTS)
+tx_pin <- hardware.pin1;
+
+dmx <- Dmx512Controller(uart, tx_pin, tx_en);
+
+// Did we get an array of dmx values?
+agent.on("dmxValues", dmxFromAgent);
+
+// Did we get one color to set on all fixtures?
+agent.on("OneColor", OneColor);
+
+// If the agent ask us to report current color
+agent.on("ReportColor", ReportColor);
+
+// On startup, set color to something not black
+SetAllToOneColor(255,10,100,0);

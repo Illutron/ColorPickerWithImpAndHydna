@@ -1,0 +1,52 @@
+#shipcolor {
+
+    background-color: gray;
+    width: 208px;
+    height: 114px;
+}
+#output {
+    color: white;
+    font-size: small;
+}
+#wrapper {
+     width: 208px;
+     margin: 0 auto;
+ }
+
+ #mycolor {
+     width: 208px;
+     height: 7px;
+     margin: 0 auto;
+     border-top-left-radius: 3px;
+	 border-top-right-radius: 3px;
+	 background-color: #1A1A1A;
+ }
+
+ .colorvalue {
+
+ 	display:none;
+ }
+
+ #avatars {
+     width: 208px;
+     height:32px;
+     margin: 0 auto;
+     background-color: black;
+ }
+
+.avatar {
+
+    display: inline-block;
+    width: 15px;
+    height: 32px;
+    background-color: #E8E8E8;
+}
+
+.myavatar {
+    margin-right: 20px;
+
+}
+
+ body {
+ 	background-color: black;
+ }

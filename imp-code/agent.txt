@@ -1,0 +1,110 @@
+
+const HYDNA_URL = "http://illutron.hydna.net";
+const HYDNA_CHANNEL = "colors"
+
+function requestHandler(request, response) {
+  try {
+      local responseText = "ok";
+
+      // These headers are needed for jquery-security-reasons.
+      response.header("Access-Control-Allow-Origin", "*");
+      response.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+     
+    // Code to handle a dmx value array as a query string
+    if ("dmx" in request.query) {
+     
+      // We expect to get a request like this ?dmx=0,255,0,250
+      // This means: Channel 1: 0, ch 2: 255, ch 3: 0, ch 4: 250
+      local dmxArray = request.query.dmx;
+      local dmxValues = split(dmxArray,",");
+      device.send("dmxValues",dmxValues);
+      responseText += "We got a dmx-address-string"
+    }
+    
+    if ("reportcolor" in request.query) {
+        local data = 42;
+        device.send("ReportColor",data);
+        server.log("reporting...");
+    }
+    
+    if ("report_imp_status" in request.query){
+        message <- { "device_online": "false", "action": "status_from_the_imp" };
+        server.log("repost status");
+        if (device.isconnected()) {
+            message.device_online = "true";
+        } else {
+            
+        }
+        sendToHydna(HYDNA_CHANNEL, message);
+    }
+    
+    // Code to handle the Pitchfork Color Picker.
+    // JSON in this form: 
+    // { "red" : "(red value)" , "green" : "(green value)" , "blue" : "(blue value)" }
+    // Example: Red at 100% brightness
+    // { "red" : "255" , "green" : "0" , "blue" : "0" }
+    try {
+        // Maybe we got a JSON - Lets decode it!
+        local data = http.jsondecode(request.body);
+        if("red" in data){
+            data.r = data.red;
+            data.g = data.green;
+            data.b = data.blue;
+            device.send("OneColor",data);
+             responseText = "JSON received";
+        }
+        
+        // We also want to be able to get an array of colors, to set multiple fixtures
+        /* "colors":[
+        {"r":"255", "g":"200", "b":"100"},
+        {"r":"255", "g":"200", "b":"100"},
+        {"r":"255", "g":"200", "b":"100"}
+        ]
+        */
+        //server.log(data);
+        if("r" in data[0]){
+            // Later on we install logic to handle multiple colors
+            
+            device.send("OneColor",data[0]);
+             responseText = "JSON received";
+        }
+    } catch (ex){
+        responseText = " - No JSON or bad JSON received";
+    }
+    response.send(200,responseText);
+
+  } catch (ex) {
+    response.send(500, "Internal Server Error: " + ex);
+  }
+}
+ 
+// register the HTTP handler
+http.onrequest(requestHandler);
+function onecolorsetondevice(colors){
+    colors.action <- "color_from_the_imp";
+    sendToHydna(HYDNA_CHANNEL, colors);
+}
+
+device.on("onecolorset",onecolorsetondevice);
+
+function processHydnaResponse(incomingDataTable) 
+{
+}
+function sendToHydna(channel, message){
+    // Inject a 'action' = 'from_the_imp' into the message
+  /*  local message = {};
+    message.r <- colors.r;
+    message.g <- colors.g;
+    message.b <- colors.b;
+    message.w <- colors.w;*/
+   
+
+    local url = HYDNA_URL+"/"+channel + "?imp_agent";
+    local headers = { "Content-Type": "application/json" };
+    local body = http.jsonencode(message);
+    server.log(body);
+  
+    // send data to your web service
+    http.post(url, headers, body).sendasync(processHydnaResponse);
+}
+

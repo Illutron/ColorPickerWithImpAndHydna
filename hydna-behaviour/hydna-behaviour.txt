@@ -1,0 +1,152 @@
+// Content for Bemachine on hydna.com
+
+// Report number of connected clients on every open or close
+const MAX = 4;
+const KEY = 'clients_online';
+
+behavior('/colors', {
+    open: function(event) {
+        // The imp agent should never respect the maximum
+        if (event.token != 'imp_agent') {
+            var maxClients = MAX;
+        } else {
+            var maxClients = MAX+1;
+        }
+        // Attempt to increase the number of clients on the channel
+        // by one. Will give an error MAX is exceeded.
+        event.channel.incr(KEY, maxClients, function(err, value) {
+            if (err) {
+                event.deny("Channel is at Max");
+            } else {
+                // Since the client was allowed to log in, lets add the client_id to the channel list
+                var new_client_id = event.connection.id;
+                var color = {r:100, g:100, b:100};
+
+                var new_client_data = {
+                    client_id: new_client_id,
+                    last_selected_color: color
+                };
+                var clients_online = value;
+                event.channel.set('clients:' + new_client_id, new_client_data);
+
+                event.channel.findall('clients:*', function(err, all_clients) {
+                    event.channel.get('color_log', function(err, color) {
+                    
+                        // only emit if the list has been initialized.
+                        var current_ship_color = {r:50, g:50, b:50};
+                        if (!err && color !== null) {
+                            current_ship_color = color;
+                        } 
+                        //console.log(current_ship_color);
+                       // If a user logged in, send a status message to everybody
+                        // Use event.allow() to pass a message to the user
+                        
+                        // If the count and the number of people online does not match, log an error
+                        if(clients_online !== all_clients.length) {
+                            console.log("Mismatch: clients_online: " + clients_online + " all_clients.length: " + all_clients.length);
+                        }                    
+
+                        var messagePacket = JSON.stringify({
+                            action: 'status_new_client',
+                            clients_online: clients_online,
+                            all_clients: all_clients,
+                            client_id: new_client_id,
+                            current_ship_color: current_ship_color
+                        });
+                        //,
+                         //   current_ship_color: current_ship_color
+                        // We don't want any actions taken, if it is the imp_agent logging in
+                        if (event.token != 'imp_agent') {
+                            // Send message to all clients to inform of the new user
+                            event.channel.emit(messagePacket);
+
+                            // Allow, getting the status message back the the client that just connected
+                            event.allow(messagePacket);
+                        }    
+                                                   
+                    });
+        
+                });                
+            }
+        });
+        
+        
+    },
+    close: function(event) {
+        // Decrease the number of clients on the channel as clients
+        // close the channel.
+
+        var left_client_id = event.connection.id;
+        
+        
+        event.channel.decr(KEY, 0, function(err,value) {
+           if (err) {
+                // We get this error if we try to decrease below 0. 
+                // This should never happen!
+                console.log(err);
+                //event.deny("Channel is at 0");
+            } else {
+                // If a user logged off, send a status message to everybody
+                var clients_online = value;
+
+                event.channel.del('clients:' + left_client_id);
+        
+                event.channel.findall('clients:*', function(err, items) {
+                    var all_clients = items;   
+                    
+                    // If the count and the number of people online does not match, log an error
+                    if(clients_online !== all_clients.length) {
+                        console.log("Mismatch: clients_online: " + clients_online + " all_clients.length: " + all_clients.length);
+                    }
+                    
+                    // Send status message to all clients to inform of the new number of users
+                    var messagePacket = JSON.stringify({
+                        action: 'status_client_left',
+                        clients_online: clients_online,
+                        all_clients: all_clients,
+                        client_id: left_client_id
+                    });
+                    // Send message to all clients to inform of the new user
+                    event.channel.emit(messagePacket);
+                });
+
+            } 
+
+        });           
+        
+    },
+    emit: function(event) {
+        var packet = JSON.parse(event.data);
+        
+        if (packet.action == 'set_color') {
+            // Pass on the color message
+            event.channel.emit(event.data);
+
+            // Save the color to a log, to get the last color set for when a new user logs ing
+            event.channel.set('color_log', packet.color);
+            
+
+            // The user set the color, lets save this and pass it on to the others
+            var client_id = event.connection.id;
+            console.log(client_id);
+            
+            event.channel.get('clients:' + client_id, function(err, client_data) {
+                // Find the user in the list. 
+
+                if (!err && client_data != null) {
+                    // Add the color to the users data packet
+                    client_data.last_selected_color = packet.color;
+                    // Save it again
+                    event.channel.set('clients:' + client_id, client_data);
+                }
+            });
+
+
+        }
+        else {
+            // ignore other commands for now
+        }
+    }
+
+});
+
