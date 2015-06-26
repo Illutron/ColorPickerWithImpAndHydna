@@ -50,12 +50,12 @@ $(document).ready(function(){
     output.append($('<div/>', { text: 'Connecting ...' }));
 
     // This is where we set the channel to talk on
-    var channel = new HydnaChannel('illutron.hydna.net/colors', 'rwe');
+    var channel = new HydnaChannel('colorpicker.hydna.net/colors', 'rwe');
 
     // We should have an error -handling thing to give people a message that > 30 people online. 
     channel.onopen = function(event) {
         impReportStatus();
-        impReportColor();
+       // impReportColor();
         output.append($('<div/>', { text: 'Connected!' }));
 
         output.hide(1500);
@@ -288,7 +288,7 @@ $(document).ready(function(){
 
 		// Set the agent-url to the agent-url of the imp
 		$.ajax({
-			url: 'https://agent.electricimp.com/xsSxo2N7jzG2',
+			url: 'https://agent.electricimp.com/' + agent,
 			type: 'POST',
 			data: JSON.stringify(colors),
 			contentType: 'application/json; charset=utf-8',
@@ -308,7 +308,7 @@ $(document).ready(function(){
     function impReportStatus(){
         // Call the imp and ask for a status
         $.ajax({
-            url: 'https://agent.electricimp.com/xsSxo2N7jzG2?report_imp_status=true',
+            url: 'https://agent.electricimp.com/' + agent + '?report_imp_status=true',
             type: 'POST',
             data: 'report_imp_status',
             contentType: 'text/plain; charset=utf-8',
@@ -329,7 +329,7 @@ $(document).ready(function(){
         if (imp_device_online != "false") {
     		// Call the imp and tell it to repport last color
     		$.ajax({
-    			url: 'https://agent.electricimp.com/xsSxo2N7jzG2?reportcolor=true',
+    			url: 'https://agent.electricimp.com/' + agent + '?reportcolor=true',
     			type: 'POST',
     			data: 'reportcolor',
     			contentType: 'text/plain; charset=utf-8',
