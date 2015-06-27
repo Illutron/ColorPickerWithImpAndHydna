@@ -4,7 +4,8 @@ const HYDNA_CHANNEL = "colors"
 
 function requestHandler(request, response) {
   try {
-      local responseText = "ok";
+      local responseText = "-";
+      local responseCode = 200;
 
       // These headers are needed for jquery-security-reasons.
       response.header("Access-Control-Allow-Origin", "*");
@@ -21,6 +22,17 @@ function requestHandler(request, response) {
       responseText += "We got a dmx-address-string"
     }
     
+    if ("monitor_imp_status" in request.query) {
+      if(device.isconnected()){
+          responseText += "All is good. Imp Device connected";
+          responseCode = 200;
+      } else 
+      {
+          responseText += "Problem. Imp Device is not connected";
+          responseCode = 500;
+      }
+    }
+
     if ("reportcolor" in request.query) {
         local data = 42;
         device.send("ReportColor",data);
@@ -69,9 +81,9 @@ function requestHandler(request, response) {
              responseText = "JSON received";
         }
     } catch (ex){
-        responseText = " - No JSON or bad JSON received";
+        responseText += " - No JSON or bad JSON received";
     }
-    response.send(200,responseText);
+    response.send(responseCode,responseText);
 
   } catch (ex) {
     response.send(500, "Internal Server Error: " + ex);
